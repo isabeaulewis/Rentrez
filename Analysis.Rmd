@@ -1,0 +1,118 @@
+---
+title: "Analysis"
+author: "Isabeau Lewis"
+date: "`r Sys.Date()`"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+https://github.com/isabeaulewis/Rentrez.git
+
+# Part I
+
+## Importing the `Sequences.csv` file
+```{r}
+Sequences <- read.csv("Sequences.csv")
+```
+
+## Printing out each sequence
+```{r}
+print(Sequences$Sequence)
+```
+
+## Counting the number of each base pair in each of the three sequences:
+```{r}
+library(stringr)
+Sequences$A_Count <- str_count(Sequences$Sequence, "A")
+Sequences$T_Count <- str_count(Sequences$Sequence, "T")
+Sequences$G_Count <- str_count(Sequences$Sequence, "G")
+Sequences$C_Count <- str_count(Sequences$Sequence, "C")
+
+print(Sequences)
+```
+
+## Printing out the number of each nucleotide as a table
+```{r}
+library(dplyr)
+Nucleotide_counts <- Sequences %>% dplyr::select(Name, A_Count, T_Count, G_Count, C_Count)
+print(Nucleotide_counts)
+```
+
+## Calculating GC content & creating a table of GC content for each sequence ID
+```{r}
+Nucleotide_counts <- Nucleotide_counts %>% 
+  mutate(GC_content = 100*(G_Count + C_Count)/(G_Count + C_Count + A_Count + T_Count))
+print(Nucleotide_counts)
+```
+
+## Image of bacteria & link to the wikipedia page for _Borrelia burgdorferi_
+
+[The _B. burgdorferi_ Wikipedia](https://en.wikipedia.org/wiki/Borrelia_burgdorferi)
+
+```{r echo=FALSE}
+knitr::include_graphics("https://upload.wikimedia.org/wikipedia/commons/thumb/3/32/EscherichiaColi_NIAID.jpg/640px-EscherichiaColi_NIAID.jpg")
+```
+
+# Part II
+
+## Running blast
+```{r}
+library(annotate)
+
+# Loading the sequence
+SeqX <- "GCCTGATGGAGGGGGATAACTACTGGAAACGGTAGCTAATACCGCATGACCTCGCAAGAGCAAAGTGGGGGACCTTAGGGCCTCACGCCATCGGATGAACCCAGATGGGATTAGCTAGTAGGTGGGGTAATGGCTCACCTAGGCGACGATCCCTAGCTGGTCTGAGAGGATGACCAGCCACACTGGAACTGAGACACGGTCCAGACTCCTACGGGAGGCAGCAGTGGGGAATATTGCACAATGGGCGCAA"
+
+# BLAST
+SeqXBlastDF <- blastSequences(SeqX, timeout=250, hitListSize = 10, as='data.frame')
+```
+
+## Generating an alignment
+```{r}
+# Loading libraries
+library(muscle)
+library(dplyr)
+
+# Loading data:
+SeqXBlastDF$Hsp_score <- as.numeric(SeqXBlastDF$Hsp_score) 
+SeqXBlastDF <- dplyr::arrange(SeqXBlastDF, desc(Hsp_score))
+
+alignDF <- SeqXBlastDF[1:10,] # Using top 10 highest scores
+
+# Running alignment 
+alignDFstring <- alignDF$Hsp_hseq %>% # Getting top hits as DNA strings
+  as.character %>% 
+  lapply(.,paste0,collapse="") %>% 
+  unlist %>% 
+  DNAStringSet 
+
+SeqXString <- SeqX %>% DNAStringSet # Getting SeqX as a string
+
+SeqAlign<-muscle::muscle(stringset=c(alignDFstring, SeqXString), quiet=T) # Running the alignment with the top 10 matches and the unknown sequence (row 11)
+```
+
+```{r}
+print(SeqAlign)
+```
+
+> Figure 1: The top 10 hit sequences for the unknown DNA sequence found via NCBI (rows 1-10), and the unknown sequence itself (row 11). Nucleotides are coloured depending on their identity (not shown in HTML output). The alignment appears to match up entirely, indicating that the sampled DNA is from _Y. pestis_. DNA was obtained through nanopore sequencing of a human patient's biofluids that was subsequently filtered to exclude human DNA.
+
+
+## Report
+This sequence appears to most closely match a non-human sequence. It appears to be from a _Yersinia_ species (Fig. 2), likely _Y. pestis_ (although lower hit score matches also returned _Y. pseudotuberculosis_). The top 10 sequences
+
+If this is _Y. pestis_, this is the bacteria that causes the Black Plague. This is a very serious issue, so I would recommend to the clinician immediate followup, including antibiotic treatment, quarantining, and medical treatment for associated symptoms.
+
+```{r echo=FALSE}
+knitr::include_graphics("https://microbewiki.kenyon.edu/images/thumb/6/6c/3D_Yersinia_pestis_model.jpeg/400px-3D_Yersinia_pestis_model.jpeg")
+```
+
+> Fig. 2: A _Yersinia_ bacterium.
+
+
+
+
